@@ -11,6 +11,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.concurrent.TimeUnit;
 
@@ -59,8 +61,15 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
 
         //更新数据库
         this.updateById(shop);
-        //删除缓存
-        redisTemplate.delete(CACHE_SHOP_KEY+id);
+        // 2. 事务提交成功后，再删除缓存
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        redisTemplate.delete(CACHE_SHOP_KEY + id);
+                    }
+                }
+        );
         return Result.ok();
     }
 }
