@@ -22,7 +22,7 @@ import static com.hmdp.utils.RedisConstants.LOCK_SHOP_KEY;
 @AllArgsConstructor
 public class CacheClient {
     private final StringRedisTemplate stringRedisTemplate;
-    //创建10线程的线程池
+    //创建10线程的线程池，线程创建需要消耗大量资源，复用线程减少消耗
     private static final ExecutorService CACHE_REBUILD_EXECUTOR = Executors.newFixedThreadPool(10);
 
     /**
@@ -44,7 +44,7 @@ public class CacheClient {
     }
 
     /**
-     *  利用逻辑过期解决缓存击穿问题
+     * 利用逻辑过期解决缓存击穿问题
      */
     public <R, ID> R queryWithLogicExpire(String keyPrefix, ID id, Class<R> type, Function<ID, R> dbFallback, Long time, TimeUnit unit) {
         String key = keyPrefix + id;
@@ -59,7 +59,7 @@ public class CacheClient {
         LocalDateTime expireTime = redisData.getExpireTime();
 
         //缓存未过期
-        if (expireTime.isAfter(LocalDateTime.now())){
+        if (expireTime.isAfter(LocalDateTime.now())) {
             return r;
         }
         //缓存过期
@@ -67,26 +67,26 @@ public class CacheClient {
         String lock_key = LOCK_SHOP_KEY + id;
         boolean flag = tryLock(lock_key);
         //获取锁
-        if (flag){
+        if (flag) {
             // DoubleCheck 防止缓存重建
             if (expireTime.isAfter(LocalDateTime.now())) {
                 return r;
             }
             //
-            CACHE_REBUILD_EXECUTOR.submit(()->{
+            CACHE_REBUILD_EXECUTOR.submit(() -> {
                 try {
                     R apply = dbFallback.apply(id);
                     this.setWithLogicExpire(key, apply, time, unit);
-                }catch (Exception e){
+                } catch (Exception e) {
                     throw new RuntimeException(e);
-                }finally {
+                } finally {
                     unlock(lock_key);
                 }
             });
 
 
         }
-        //未获取锁,返回旧数据
+        //未获取和当前线程,返回旧数据
         return r;
 
 
